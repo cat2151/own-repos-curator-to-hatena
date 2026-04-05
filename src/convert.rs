@@ -429,7 +429,7 @@ old body
     }
 
     #[test]
-    fn preserves_hatena_entry_id_when_front_matter_has_blank_and_comment_lines() {
+    fn preserves_entry_id_with_comments_and_blank_lines() {
         let data = RepoData {
             meta: Meta {
                 github_desc_updated_at: "2026-04-05".into(),
@@ -462,7 +462,7 @@ hatena_entry_id: "12345678901234567890"
     }
 
     #[test]
-    fn does_not_preserve_hatena_entry_id_from_invalid_quoted_yaml_front_matter() {
+    fn rejects_invalid_quoted_entry_id() {
         let data = RepoData {
             meta: Meta {
                 github_desc_updated_at: "2026-04-05".into(),
