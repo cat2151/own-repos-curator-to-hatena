@@ -266,8 +266,12 @@ hatena_entry_id: 12345678901234567890 # inline comment
     }
 
     #[test]
-    fn rejects_unquoted_yaml_scalars_and_inline_comments() {
+    fn rejects_unquoted_yaml_scalars_without_inline_comments() {
         assert_eq!(super::parse_yaml_scalar("12345678901234567890"), None);
+    }
+
+    #[test]
+    fn rejects_unquoted_yaml_scalars_with_inline_comments() {
         assert_eq!(
             super::parse_yaml_scalar("12345678901234567890 # inline comment"),
             None
