@@ -115,9 +115,10 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
             };
         }
 
-        let (key, value) = line.split_once(':')?;
-        let value = value.trim();
-        match key.trim() {
+        let separator_index = line.find(':')?;
+        let key = line[..separator_index].trim();
+        let value = line[separator_index + 1..].trim();
+        match key {
             "title" => {
                 parse_yaml_scalar(value)?;
                 has_title = true;
