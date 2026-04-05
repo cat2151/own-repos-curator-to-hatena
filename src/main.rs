@@ -3,10 +3,36 @@ mod git;
 mod model;
 
 use anyhow::{Context, Result};
-use std::{env, fs, path::PathBuf, process::Command};
+use cat_self_update_lib::{check_remote_commit, self_update};
+use clap::{Parser, Subcommand};
+use std::{fs, path::PathBuf, process::Command};
 
+const BUILD_COMMIT_HASH: &str = env!("BUILD_COMMIT_HASH");
+const REPO_OWNER: &str = "cat2151";
+const REPO_NAME: &str = "own-repos-curator-to-hatena";
+const MAIN_BRANCH: &str = "main";
 const HATENA_REPO: &str = "cat2151/cat2151-hatena-blog-contents";
 const POST_FILE: &str = "posts/own-repos-curator.md";
+
+#[derive(Parser)]
+#[command(name = "own-repos-curator-to-hatena")]
+#[command(about = "Publish own-repos-curator output to the Hatena contents repository")]
+struct Cli {
+    #[arg(long, global = true, help = "Write markdown locally without pushing")]
+    dry_run: bool,
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Self-update the application from GitHub
+    Update,
+    /// Print the build-time commit hash
+    Hash,
+    /// Compare the build-time commit hash with the remote main branch
+    Check,
+}
 
 fn repos_json_path() -> Result<PathBuf> {
     let base = dirs::data_local_dir()
@@ -18,8 +44,20 @@ fn repos_json_path() -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
-    let dry_run = env::args().any(|a| a == "--dry-run");
+    let cli = Cli::parse();
 
+    match cli.command {
+        Some(Commands::Update) => run_self_update(),
+        Some(Commands::Hash) => {
+            println!("{BUILD_COMMIT_HASH}");
+            Ok(())
+        }
+        Some(Commands::Check) => run_check(),
+        None => run_publish(cli.dry_run),
+    }
+}
+
+fn run_publish(dry_run: bool) -> Result<()> {
     let json_path = repos_json_path()?;
     let json = fs::read_to_string(&json_path)
         .with_context(|| format!("failed to read {}", json_path.display()))?;
@@ -63,6 +101,18 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn run_self_update() -> Result<()> {
+    self_update(REPO_OWNER, REPO_NAME, &["own-repos-curator-to-hatena"])
+        .map_err(|err| anyhow::anyhow!("self update failed: {err}"))
+}
+
+fn run_check() -> Result<()> {
+    let result = check_remote_commit(REPO_OWNER, REPO_NAME, MAIN_BRANCH, BUILD_COMMIT_HASH)
+        .map_err(|err| anyhow::anyhow!("check failed: {err}"))?;
+    println!("{result}");
+    Ok(())
+}
+
 fn ensure_gh_auth() -> Result<()> {
     let output = Command::new("gh")
         .args(["auth", "status"])
@@ -73,4 +123,31 @@ fn ensure_gh_auth() -> Result<()> {
         anyhow::bail!("gh auth status failed: {stderr}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Commands};
+    use clap::Parser;
+
+    #[test]
+    fn parses_without_subcommand() {
+        let cli = Cli::parse_from(["own-repos-curator-to-hatena"]);
+        assert!(!cli.dry_run);
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn parses_dry_run_without_subcommand() {
+        let cli = Cli::parse_from(["own-repos-curator-to-hatena", "--dry-run"]);
+        assert!(cli.dry_run);
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn parses_update_subcommand() {
+        let cli = Cli::parse_from(["own-repos-curator-to-hatena", "update"]);
+        assert!(!cli.dry_run);
+        assert!(matches!(cli.command, Some(Commands::Update)));
+    }
 }
