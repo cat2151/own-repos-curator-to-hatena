@@ -1,0 +1,1 @@
+# own-repos-curator-to-hatena
