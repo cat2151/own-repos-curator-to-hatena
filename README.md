@@ -1,5 +1,17 @@
 # own-repos-curator-to-hatena
 
+# What is this?
+
+- This is an application called by `own-repos-curator`.
+- Based on `repos.json`, it generates Markdown files for posting to Hatena Blog.
+- The generated Markdown files are automatically committed and pushed.
+- It's for my personal use, so it's not designed to be used by others.
+- Frequent breaking changes are expected.
+
+# Purpose
+
+- For posting descriptions of my repositories to Hatena Blog.
+
 # Installation
 
 Rust is required.
@@ -8,9 +20,9 @@ Rust is required.
 cargo install --force --git https://github.com/cat2151/own-repos-curator-to-hatena
 ```
 
-# Usage
+# Running
 
-Normal execution:
+Standard execution:
 
 ```
 own-repos-curator-to-hatena
@@ -36,4 +48,4 @@ own-repos-curator-to-hatena check
 
 # Note
 
-Python is required for `update`.
+The `update` command requires Python.
