@@ -13,6 +13,8 @@ use url_cache::UrlCache;
 
 const EXPLICIT_INDEX_FILE_NAMES: [&str; 4] =
     ["index.html", "index.htm", "index.md", "index.markdown"];
+const LOCALIZED_README_HTML_PATH: &str = "README.ja.html";
+const LOCALIZED_README_MARKDOWN_PATH: &str = "README.ja.md";
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 pub struct RepoLinkResolver {
@@ -57,33 +59,32 @@ impl RepoLinkResolver {
     fn resolve_preferred_repo_url_uncached(&self, owner: &str, repo_name: &str) -> String {
         let repo_top_url = get_repo_top_url(owner, repo_name);
         let pages_url = get_pages_fallback_url(owner, repo_name);
-        let localized_pages_url = get_pages_localized_readme_url(owner, repo_name);
-        let localized_readme_url = get_github_blob_head_url(owner, repo_name, "README.ja.md");
-        let has_localized_pages = self
-            .fetch_text(&localized_pages_url, "text/html,application/xhtml+xml")
-            .is_some();
+        let localized_readme_url =
+            get_github_blob_head_url(owner, repo_name, LOCALIZED_README_MARKDOWN_PATH);
         let pages_html = self.fetch_text(&pages_url, "text/html,application/xhtml+xml");
+        let localized_readme_markdown = self.fetch_text(
+            &get_raw_github_head_url(owner, repo_name, LOCALIZED_README_MARKDOWN_PATH),
+            "text/plain,text/markdown,*/*",
+        );
+
+        let has_localized_pages = localized_readme_markdown.as_ref().is_some_and(|_| {
+            self.url_exists(
+                &get_pages_localized_readme_url(owner, repo_name),
+                "text/html,application/xhtml+xml",
+            )
+        });
 
         let Some(pages_html) = pages_html else {
             return if has_localized_pages {
-                localized_pages_url
-            } else if self
-                .fetch_text(
-                    &get_raw_github_head_url(owner, repo_name, "README.ja.md"),
-                    "text/plain,text/markdown,*/*",
-                )
-                .is_some()
-            {
+                get_pages_localized_readme_url(owner, repo_name)
+            } else if localized_readme_markdown.is_some() {
                 localized_readme_url
             } else {
                 repo_top_url
             };
         };
 
-        let Some(localized_readme_markdown) = self.fetch_text(
-            &get_raw_github_head_url(owner, repo_name, "README.ja.md"),
-            "text/plain,text/markdown,*/*",
-        ) else {
+        let Some(localized_readme_markdown) = localized_readme_markdown else {
             return pages_url;
         };
 
@@ -166,7 +167,11 @@ fn get_pages_fallback_url(owner: &str, repo_name: &str) -> String {
 }
 
 fn get_pages_localized_readme_url(owner: &str, repo_name: &str) -> String {
-    format!("{}README.ja.html", get_pages_fallback_url(owner, repo_name))
+    format!(
+        "{}{}",
+        get_pages_fallback_url(owner, repo_name),
+        LOCALIZED_README_HTML_PATH
+    )
 }
 
 pub(super) fn get_github_blob_head_url(owner: &str, repo_name: &str, path: &str) -> String {
@@ -201,8 +206,11 @@ fn resolve_repo_target_from_artifacts(artifacts: RepoTargetArtifacts<'_>) -> Str
     let repo_top_url = get_repo_top_url(artifacts.owner, artifacts.repo_name);
     let pages_url = get_pages_fallback_url(artifacts.owner, artifacts.repo_name);
     let localized_pages_url = get_pages_localized_readme_url(artifacts.owner, artifacts.repo_name);
-    let localized_readme_url =
-        get_github_blob_head_url(artifacts.owner, artifacts.repo_name, "README.ja.md");
+    let localized_readme_url = get_github_blob_head_url(
+        artifacts.owner,
+        artifacts.repo_name,
+        LOCALIZED_README_MARKDOWN_PATH,
+    );
 
     if artifacts.has_localized_pages {
         return localized_pages_url;
