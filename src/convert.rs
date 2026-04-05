@@ -55,7 +55,8 @@ where
     ));
     out.push_str(&format!("最終更新: {updated_at}\n\n"));
 
-    for group in groups {
+    let groups_len = groups.len();
+    for (idx, group) in groups.into_iter().enumerate() {
         let anchor = group_anchor(group.name);
         out.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
         out.push_str(&format!("## {}\n\n", group.name));
@@ -91,6 +92,10 @@ where
                     .join(" ");
                 out.push_str(&format!("タグ: {tag_str}\n\n"));
             }
+        }
+
+        if idx + 1 < groups_len {
+            out.push_str("---\n\n");
         }
     }
 
@@ -219,6 +224,8 @@ mod tests {
         assert!(markdown.contains("- [stub](#group-stub) (1件)"));
         assert!(markdown.contains("<a id=\"group-etc\"></a>"));
         assert!(markdown.contains("<a id=\"group-stub\"></a>"));
+        assert!(markdown.contains("（説明なし）\n\n---\n\n<a id=\"group-alpha\"></a>"));
+        assert!(!markdown.ends_with("---\n\n"));
     }
 
     #[test]
