@@ -55,12 +55,11 @@ where
     ));
     out.push_str(&format!("最終更新: {updated_at}\n\n"));
 
-    let groups_len = groups.len();
-    for (idx, group) in groups.into_iter().enumerate() {
+    for (idx, group) in groups.iter().enumerate() {
         let anchor = group_anchor(group.name);
         out.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
         out.push_str(&format!("## {}\n\n", group.name));
-        for repo in group.repos {
+        for repo in &group.repos {
             resolved_repos += 1;
             println!(
                 "[url-resolve] ({resolved_repos}/{total_repos}) start: {owner}/{}",
@@ -94,7 +93,7 @@ where
             }
         }
 
-        if idx + 1 < groups_len {
+        if idx + 1 < groups.len() {
             out.push_str("---\n\n");
         }
     }
