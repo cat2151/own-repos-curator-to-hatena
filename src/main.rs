@@ -7,7 +7,7 @@ mod repo_links;
 use anyhow::{Context, Result};
 use cat_self_update_lib::{check_remote_commit, self_update};
 use clap::{Parser, Subcommand};
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, io::ErrorKind, path::PathBuf, process::Command};
 
 const BUILD_COMMIT_HASH: &str = env!("BUILD_COMMIT_HASH");
 const REPO_OWNER: &str = "cat2151";
@@ -76,7 +76,13 @@ fn run_publish(dry_run: bool) -> Result<()> {
         git::run(&repo_dir, ["pull", "--ff-only"])?;
 
         let post_path = repo_dir.join(POST_FILE);
-        existing_markdown = fs::read_to_string(&post_path).ok();
+        existing_markdown = match fs::read_to_string(&post_path) {
+            Ok(markdown) => Some(markdown),
+            Err(err) if err.kind() == ErrorKind::NotFound => None,
+            Err(err) => {
+                return Err(err).with_context(|| format!("failed to read {}", post_path.display()));
+            }
+        };
         Some(repo_dir)
     };
 

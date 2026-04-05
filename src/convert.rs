@@ -104,6 +104,8 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
     let mut hatena_entry_id: Option<String> = None;
 
     for line in lines {
+        let line = line.trim();
+
         if line == "---" {
             return if has_title {
                 match hatena_entry_id {
@@ -115,6 +117,11 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
             };
         }
 
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // `:` を含まない行は、この用途では不正な front matter として扱う。
         let separator_index = line.find(':')?;
         let key = line[..separator_index].trim();
         let value = line[separator_index + 1..].trim();
@@ -134,7 +141,11 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
 }
 
 fn parse_yaml_scalar(value: &str) -> Option<String> {
-    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+    if value.starts_with('"') {
+        if value.len() < 2 || !value.ends_with('"') {
+            return None;
+        }
+
         let mut out = String::new();
         let mut chars = value[1..value.len() - 1].chars();
 
@@ -403,6 +414,70 @@ old body
 | --- | --- |
 | title | someoneのGitHubリポジトリ一覧 |
 | hatena_entry_id | 12345678901234567890 |
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+        )));
+    }
+
+    #[test]
+    fn preserves_hatena_entry_id_when_front_matter_has_blank_and_comment_lines() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let existing_markdown = r#"---
+# comment
+
+title: "old title"
+hatena_entry_id: "12345678901234567890"
+---
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+        )));
+    }
+
+    #[test]
+    fn does_not_preserve_hatena_entry_id_from_invalid_quoted_yaml_front_matter() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let existing_markdown = r#"---
+title: "old title"
+hatena_entry_id: "12345678901234567890
+---
 "#;
 
         let markdown = build_markdown(
