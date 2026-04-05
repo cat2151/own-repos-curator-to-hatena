@@ -11,7 +11,10 @@ const POST_FILE: &str = "posts/own-repos-curator.md";
 fn repos_json_path() -> Result<PathBuf> {
     let base = dirs::data_local_dir()
         .ok_or_else(|| anyhow::anyhow!("failed to resolve AppData\\Local"))?;
-    Ok(base.join("own-repos-curator").join("data").join("repos.json"))
+    Ok(base
+        .join("own-repos-curator")
+        .join("data")
+        .join("repos.json"))
 }
 
 fn main() -> Result<()> {
@@ -20,8 +23,8 @@ fn main() -> Result<()> {
     let json_path = repos_json_path()?;
     let json = fs::read_to_string(&json_path)
         .with_context(|| format!("failed to read {}", json_path.display()))?;
-    let data: model::RepoData = serde_json::from_str(&json)
-        .context("failed to parse repos.json")?;
+    let data: model::RepoData =
+        serde_json::from_str(&json).context("failed to parse repos.json")?;
 
     let markdown = convert::build_markdown(&data);
 

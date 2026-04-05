@@ -5,8 +5,7 @@ use std::{
 };
 
 pub fn managed_dir() -> Result<PathBuf> {
-    let base = dirs::data_local_dir()
-        .ok_or_else(|| anyhow!("failed to resolve local data dir"))?;
+    let base = dirs::data_local_dir().ok_or_else(|| anyhow!("failed to resolve local data dir"))?;
     Ok(base.join("own-repos-curator-to-hatena").join("repos"))
 }
 
@@ -15,7 +14,7 @@ pub fn ensure_managed_clone(repo: &str) -> Result<PathBuf> {
     std::fs::create_dir_all(&base)
         .with_context(|| format!("failed to create dir: {}", base.display()))?;
 
-    let repo_name = repo.split('/').last().unwrap_or(repo);
+    let repo_name = repo.split('/').next_back().unwrap_or(repo);
     let repo_dir = base.join(repo_name);
 
     if !repo_dir.exists() {

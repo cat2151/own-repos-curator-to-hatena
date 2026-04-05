@@ -1,15 +1,14 @@
 use crate::model::{Repo, RepoData};
-use std::collections::BTreeMap;
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, HashMap},
+};
 
 const GITHUB_BASE: &str = "https://github.com/cat2151";
 
 pub fn build_markdown(data: &RepoData) -> String {
-    let mut groups: BTreeMap<&str, Vec<&Repo>> = BTreeMap::new();
-    for repo in &data.repos {
-        groups.entry(&repo.group).or_default().push(repo);
-    }
-
     let updated_at = &data.meta.last_json_commit_push_date;
+    let groups = collect_groups(data);
 
     let mut out = String::new();
 
@@ -19,13 +18,26 @@ pub fn build_markdown(data: &RepoData) -> String {
     out.push_str("| title | cat2151のGitHubリポジトリ一覧 |\n");
     out.push('\n');
 
+    out.push_str("## 目次\n\n");
+    for group in &groups {
+        let anchor = group_anchor(group.name);
+        out.push_str(&format!(
+            "- [{}](#{anchor}) ({}件)\n",
+            group.name,
+            group.repos.len()
+        ));
+    }
+    out.push('\n');
+
     out.push_str("## 概要\n\n");
     out.push_str("cat2151のGitHubリポジトリをグループ別に一覧化したものです。\n\n");
     out.push_str(&format!("最終更新: {updated_at}\n\n"));
 
-    for (group, repos) in &groups {
-        out.push_str(&format!("## {group}\n\n"));
-        for repo in repos {
+    for group in groups {
+        let anchor = group_anchor(group.name);
+        out.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
+        out.push_str(&format!("## {}\n\n", group.name));
+        for repo in group.repos {
             let url = format!("{GITHUB_BASE}/{}", repo.name);
             out.push_str(&format!("### [{}]({})\n\n", repo.name, url));
 
@@ -40,7 +52,9 @@ pub fn build_markdown(data: &RepoData) -> String {
             }
 
             if !repo.tags.is_empty() {
-                let tag_str = repo.tags.iter()
+                let tag_str = repo
+                    .tags
+                    .iter()
                     .map(|t| format!("`{t}`"))
                     .collect::<Vec<_>>()
                     .join(" ");
@@ -50,4 +64,139 @@ pub fn build_markdown(data: &RepoData) -> String {
     }
 
     out
+}
+
+#[derive(Debug)]
+struct RepoGroup<'a> {
+    name: &'a str,
+    repos: Vec<&'a Repo>,
+}
+
+fn collect_groups<'a>(data: &'a RepoData) -> Vec<RepoGroup<'a>> {
+    let mut grouped: BTreeMap<&str, Vec<&Repo>> = BTreeMap::new();
+    for repo in &data.repos {
+        grouped.entry(&repo.group).or_default().push(repo);
+    }
+
+    let registered_indices: HashMap<&str, usize> = data
+        .registered_groups
+        .iter()
+        .enumerate()
+        .map(|(idx, group)| (group.as_str(), idx))
+        .collect();
+
+    let mut groups: Vec<_> = grouped
+        .into_iter()
+        .map(|(name, repos)| RepoGroup { name, repos })
+        .collect();
+
+    groups.sort_by_key(|group| {
+        (
+            group_sort_bucket(group.name),
+            Reverse(group.repos.len()),
+            registered_indices
+                .get(group.name)
+                .copied()
+                .unwrap_or(usize::MAX),
+            group.name,
+        )
+    });
+
+    groups
+}
+
+fn group_sort_bucket(group: &str) -> u8 {
+    match group {
+        "etc" => 1,
+        "stub" => 2,
+        _ => 0,
+    }
+}
+
+fn group_anchor(group: &str) -> String {
+    let mut anchor = String::from("group");
+    let mut previous_was_separator = true;
+
+    for ch in group.chars() {
+        if ch.is_alphanumeric() {
+            if previous_was_separator {
+                anchor.push('-');
+            }
+            anchor.extend(ch.to_lowercase());
+            previous_was_separator = false;
+        } else if !previous_was_separator {
+            previous_was_separator = true;
+        }
+    }
+
+    if anchor == "group" {
+        "group-section".to_string()
+    } else {
+        anchor
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_markdown;
+    use crate::model::{Meta, Repo, RepoData};
+
+    #[test]
+    fn builds_toc_and_sorts_groups_by_count_with_etc_and_stub_last() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["beta".into(), "alpha".into(), "etc".into(), "stub".into()],
+            repos: vec![
+                repo("beta-1", "beta"),
+                repo("beta-2", "beta"),
+                repo("alpha-1", "alpha"),
+                repo("alpha-2", "alpha"),
+                repo("etc-1", "etc"),
+                repo("etc-2", "etc"),
+                repo("etc-3", "etc"),
+                repo("stub-1", "stub"),
+                repo("gamma-1", "gamma"),
+                repo("gamma-2", "gamma"),
+            ],
+        };
+
+        let markdown = build_markdown(&data);
+
+        let toc_pos = markdown.find("## 目次").unwrap();
+        let overview_pos = markdown.find("## 概要").unwrap();
+        let beta_pos = markdown.find("## beta").unwrap();
+        let alpha_pos = markdown.find("## alpha").unwrap();
+        let gamma_pos = markdown.find("## gamma").unwrap();
+        let etc_pos = markdown.find("## etc").unwrap();
+        let stub_pos = markdown.find("## stub").unwrap();
+
+        assert!(toc_pos < overview_pos);
+        assert!(beta_pos < alpha_pos);
+        assert!(alpha_pos < gamma_pos);
+        assert!(gamma_pos < etc_pos);
+        assert!(etc_pos < stub_pos);
+
+        assert!(markdown.contains("- [beta](#group-beta) (2件)"));
+        assert!(markdown.contains("- [etc](#group-etc) (3件)"));
+        assert!(markdown.contains("- [stub](#group-stub) (1件)"));
+        assert!(markdown.contains("<a id=\"group-etc\"></a>"));
+        assert!(markdown.contains("<a id=\"group-stub\"></a>"));
+    }
+
+    fn repo(name: &str, group: &str) -> Repo {
+        Repo {
+            name: name.into(),
+            created_at: "2026-04-05T00:00:00Z".into(),
+            updated_at: "2026-04-05T00:00:00Z".into(),
+            github_desc: String::new(),
+            desc_short: String::new(),
+            desc_long: String::new(),
+            group: group.into(),
+            tags: vec![],
+        }
+    }
 }
