@@ -4,7 +4,14 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
-pub fn build_markdown<F>(data: &RepoData, owner: &str, mut resolve_repo_url: F) -> String
+const FRONT_MATTER_TITLE: &str = "（随時更新）GitHubの自分の公開リポジトリ一覧を自動生成させてみる";
+
+pub fn build_markdown<F>(
+    data: &RepoData,
+    owner: &str,
+    existing_markdown: Option<&str>,
+    mut resolve_repo_url: F,
+) -> String
 where
     F: FnMut(&str, &str) -> String,
 {
@@ -12,14 +19,20 @@ where
     let groups = collect_groups(data);
     let total_repos = groups.iter().map(|group| group.repos.len()).sum::<usize>();
     let mut resolved_repos = 0usize;
+    let hatena_entry_id = extract_hatena_entry_id(existing_markdown).unwrap_or_default();
 
     let mut out = String::new();
 
-    // frontmatter (table形式, はてなブログ互換)
-    out.push_str("| | |\n");
-    out.push_str("| --- | --- |\n");
-    out.push_str(&format!("| title | {owner}のGitHubリポジトリ一覧 |\n"));
-    out.push('\n');
+    out.push_str("---\n");
+    out.push_str(&format!(
+        "title: \"{}\"\n",
+        escape_yaml_double_quoted(FRONT_MATTER_TITLE)
+    ));
+    out.push_str(&format!(
+        "hatena_entry_id: \"{}\"\n",
+        escape_yaml_double_quoted(&hatena_entry_id)
+    ));
+    out.push_str("---\n\n");
 
     out.push_str("## 目次\n\n");
     for group in &groups {
@@ -78,6 +91,61 @@ where
     }
 
     out
+}
+
+fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
+    let markdown = existing_markdown?;
+    let mut lines = markdown.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+
+    let mut has_title = false;
+    let mut hatena_entry_id: Option<String> = None;
+
+    for line in lines {
+        if line == "---" {
+            return if has_title {
+                match hatena_entry_id {
+                    Some(value) if !value.is_empty() => Some(value),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+        }
+
+        let (key, value) = line.split_once(':')?;
+        let value = value.trim();
+        match key.trim() {
+            "title" => {
+                parse_yaml_scalar(value)?;
+                has_title = true;
+            }
+            "hatena_entry_id" => {
+                hatena_entry_id = Some(parse_yaml_scalar(value)?);
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn parse_yaml_scalar(value: &str) -> Option<String> {
+    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+        Some(
+            value[1..value.len() - 1]
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\"),
+        )
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn escape_yaml_double_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[derive(Debug)]
@@ -152,7 +220,7 @@ fn group_anchor(group: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::build_markdown;
+    use super::{build_markdown, FRONT_MATTER_TITLE};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -179,7 +247,7 @@ mod tests {
             ],
         };
 
-        let markdown = build_markdown(&data, "cat2151", |owner, repo_name| {
+        let markdown = build_markdown(&data, "cat2151", None, |owner, repo_name| {
             format!("https://github.com/{owner}/{repo_name}")
         });
 
@@ -217,7 +285,7 @@ mod tests {
             repos: vec![repo("cat-self-update", "tools")],
         };
 
-        let markdown = build_markdown(&data, "cat2151", |owner, repo_name| {
+        let markdown = build_markdown(&data, "cat2151", None, |owner, repo_name| {
             if repo_name == "cat-self-update" {
                 format!("https://github.com/{owner}/{repo_name}/blob/HEAD/README.ja.md")
             } else {
@@ -243,12 +311,78 @@ mod tests {
             repos: vec![repo("tool-1", "tools")],
         };
 
-        let markdown = build_markdown(&data, "someone", |owner, repo_name| {
+        let markdown = build_markdown(&data, "someone", None, |owner, repo_name| {
             format!("https://github.com/{owner}/{repo_name}")
         });
 
-        assert!(markdown.contains("| title | someoneのGitHubリポジトリ一覧 |"));
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+        )));
         assert!(markdown.contains("someoneのGitHubリポジトリをグループ別に一覧化したものです。"));
+    }
+
+    #[test]
+    fn preserves_existing_hatena_entry_id_from_yaml_front_matter() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let existing_markdown = r#"---
+title: "old title"
+hatena_entry_id: "12345678901234567890"
+---
+
+old body
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+        )));
+    }
+
+    #[test]
+    fn does_not_preserve_hatena_entry_id_from_legacy_front_matter() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let existing_markdown = r#"| | |
+| --- | --- |
+| title | someoneのGitHubリポジトリ一覧 |
+| hatena_entry_id | 12345678901234567890 |
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+        )));
     }
 
     fn repo(name: &str, group: &str) -> Repo {

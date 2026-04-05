@@ -63,12 +63,32 @@ fn run_publish(dry_run: bool) -> Result<()> {
         .map(str::trim)
         .filter(|owner| !owner.is_empty())
         .unwrap_or(REPO_OWNER);
+    let mut existing_markdown = None;
+
+    if !dry_run {
+        ensure_gh_auth()?;
+    }
+
+    let repo_dir = if dry_run {
+        None
+    } else {
+        let repo_dir = git::ensure_managed_clone(HATENA_REPO)?;
+        git::run(&repo_dir, ["pull", "--ff-only"])?;
+
+        let post_path = repo_dir.join(POST_FILE);
+        existing_markdown = fs::read_to_string(&post_path).ok();
+        Some(repo_dir)
+    };
+
     let mut link_resolver =
         repo_links::RepoLinkResolver::new().context("failed to initialize repo link resolver")?;
 
-    let markdown = convert::build_markdown(&data, owner, |owner, repo_name| {
-        link_resolver.resolve_preferred_repo_url(owner, repo_name)
-    });
+    let markdown = convert::build_markdown(
+        &data,
+        owner,
+        existing_markdown.as_deref(),
+        |owner, repo_name| link_resolver.resolve_preferred_repo_url(owner, repo_name),
+    );
 
     if dry_run {
         let out_path = PathBuf::from("own-repos-curator.md");
@@ -78,10 +98,7 @@ fn run_publish(dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    ensure_gh_auth()?;
-
-    let repo_dir = git::ensure_managed_clone(HATENA_REPO)?;
-    git::run(&repo_dir, ["pull", "--ff-only"])?;
+    let repo_dir = repo_dir.expect("repo_dir should exist when dry_run is false");
 
     let post_path = repo_dir.join(POST_FILE);
     if let Some(parent) = post_path.parent() {
