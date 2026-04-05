@@ -57,11 +57,17 @@ impl RepoLinkResolver {
     fn resolve_preferred_repo_url_uncached(&self, owner: &str, repo_name: &str) -> String {
         let repo_top_url = get_repo_top_url(owner, repo_name);
         let pages_url = get_pages_fallback_url(owner, repo_name);
+        let localized_pages_url = get_pages_localized_readme_url(owner, repo_name);
         let localized_readme_url = get_github_blob_head_url(owner, repo_name, "README.ja.md");
+        let has_localized_pages = self
+            .fetch_text(&localized_pages_url, "text/html,application/xhtml+xml")
+            .is_some();
         let pages_html = self.fetch_text(&pages_url, "text/html,application/xhtml+xml");
 
         let Some(pages_html) = pages_html else {
-            return if self
+            return if has_localized_pages {
+                localized_pages_url
+            } else if self
                 .fetch_text(
                     &get_raw_github_head_url(owner, repo_name, "README.ja.md"),
                     "text/plain,text/markdown,*/*",
@@ -90,6 +96,7 @@ impl RepoLinkResolver {
             owner,
             repo_name,
             pages_html: Some(&pages_html),
+            has_localized_pages,
             has_explicit_index_page: self.has_explicit_index_page(owner, repo_name),
             readme_markdown: readme_markdown.as_deref(),
             localized_readme_markdown: Some(&localized_readme_markdown),
@@ -158,6 +165,10 @@ fn get_pages_fallback_url(owner: &str, repo_name: &str) -> String {
     )
 }
 
+fn get_pages_localized_readme_url(owner: &str, repo_name: &str) -> String {
+    format!("{}README.ja.html", get_pages_fallback_url(owner, repo_name))
+}
+
 pub(super) fn get_github_blob_head_url(owner: &str, repo_name: &str, path: &str) -> String {
     format!(
         "https://github.com/{}/{}/blob/HEAD/{}",
@@ -180,6 +191,7 @@ struct RepoTargetArtifacts<'a> {
     owner: &'a str,
     repo_name: &'a str,
     pages_html: Option<&'a str>,
+    has_localized_pages: bool,
     has_explicit_index_page: bool,
     readme_markdown: Option<&'a str>,
     localized_readme_markdown: Option<&'a str>,
@@ -188,8 +200,13 @@ struct RepoTargetArtifacts<'a> {
 fn resolve_repo_target_from_artifacts(artifacts: RepoTargetArtifacts<'_>) -> String {
     let repo_top_url = get_repo_top_url(artifacts.owner, artifacts.repo_name);
     let pages_url = get_pages_fallback_url(artifacts.owner, artifacts.repo_name);
+    let localized_pages_url = get_pages_localized_readme_url(artifacts.owner, artifacts.repo_name);
     let localized_readme_url =
         get_github_blob_head_url(artifacts.owner, artifacts.repo_name, "README.ja.md");
+
+    if artifacts.has_localized_pages {
+        return localized_pages_url;
+    }
 
     if let Some(pages_html) = artifacts.pages_html {
         if artifacts.localized_readme_markdown.is_some()
@@ -239,8 +256,8 @@ fn encode_path_segment(segment: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_github_blob_head_url, get_pages_fallback_url, get_repo_top_url,
-        resolve_repo_target_from_artifacts, RepoTargetArtifacts,
+        get_github_blob_head_url, get_pages_fallback_url, get_pages_localized_readme_url,
+        get_repo_top_url, resolve_repo_target_from_artifacts, RepoTargetArtifacts,
     };
 
     #[test]
@@ -255,6 +272,7 @@ mod tests {
                 pages_html: Some(
                     "<!DOCTYPE html><html lang=\"ja\"><head><title>repositories</title></head><body><div id=\"app\"></div></body></html>"
                 ),
+                has_localized_pages: false,
                 has_explicit_index_page: true,
                 readme_markdown: Some(
                     "# own-repos-curator-data\n\nThis is a static site for visualizing repos.json."
@@ -279,6 +297,7 @@ mod tests {
                 pages_html: Some(
                     "<!DOCTYPE html><html lang=\"en-US\"><body><div class=\"markdown-body\"><h1>cat-self-update</h1><p>Currently dogfooding.</p><a href=\"https://github.com/cat2151/cat-self-update/edit/main/README.md\">Improve this page</a></div></body></html>"
                 ),
+                has_localized_pages: false,
                 has_explicit_index_page: false,
                 readme_markdown: Some("# cat-self-update\n\n## Status\nCurrently dogfooding."),
                 localized_readme_markdown: Some(
@@ -301,6 +320,7 @@ mod tests {
                 pages_html: Some(
                     "<!DOCTYPE html><html lang=\"en-US\"><body><div id=\"header_wrap\"><a href=\"https://github.com/cat2151/claude-chat-code\">View on GitHub</a></div><section id=\"main_content\"><h1>claude-chat-code</h1><p>A Windows TUI that monitors for zip file downloads from Claude chat, then automatically builds and launches the code. Written in Rust.</p><h2>Installation</h2><p>Rust is required.</p><pre><code>cargo install --force --git https://github.com/cat2151/claude-chat-code</code></pre><h2>Challenges and Solutions</h2><p>When generating or modifying code with Claude chat, the following steps were traditionally required every time:</p><ol><li>Download the zip from Claude chat.</li><li>Back up the working directory.</li><li>Delete old files.</li></ol></section></body></html>"
                 ),
+                has_localized_pages: false,
                 has_explicit_index_page: false,
                 readme_markdown: Some(
                     "# claude-chat-code\n\nA Windows TUI that monitors for zip file downloads from Claude chat, then automatically builds and launches the code. Written in Rust.\n\n## Installation\n\nRust is required.\n\n```powershell\ncargo install --force --git https://github.com/cat2151/claude-chat-code\n```\n\n## Challenges and Solutions\n\nWhen generating or modifying code with Claude chat, the following steps were traditionally required every time:\n\n1. Download the zip from Claude chat.\n2. Back up the working directory.\n3. Delete old files."
@@ -320,11 +340,35 @@ mod tests {
                 owner: "cat2151",
                 repo_name: "unknown-repo",
                 pages_html: None,
+                has_localized_pages: false,
                 has_explicit_index_page: false,
                 readme_markdown: None,
                 localized_readme_markdown: None,
             }),
             get_repo_top_url("cat2151", "unknown-repo")
+        );
+    }
+
+    #[test]
+    fn prefers_localized_github_pages_when_available() {
+        let owner = "cat2151";
+        let repo_name = "cat-self-update";
+
+        assert_eq!(
+            resolve_repo_target_from_artifacts(RepoTargetArtifacts {
+                owner,
+                repo_name,
+                pages_html: Some(
+                    "<!DOCTYPE html><html lang=\"en-US\"><body><div class=\"markdown-body\"><h1>cat-self-update</h1></div></body></html>"
+                ),
+                has_localized_pages: true,
+                has_explicit_index_page: false,
+                readme_markdown: Some("# cat-self-update\n\n## Status\nCurrently dogfooding."),
+                localized_readme_markdown: Some(
+                    "# cat-self-update\n\n## 状況\nドッグフーディング中です。"
+                ),
+            }),
+            get_pages_localized_readme_url(owner, repo_name)
         );
     }
 }
