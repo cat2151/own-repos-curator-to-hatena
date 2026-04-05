@@ -26,7 +26,9 @@ pub(super) fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option
             continue;
         }
 
-        let separator_index = trimmed_line.find(':')?;
+        let Some(separator_index) = trimmed_line.find(':') else {
+            continue;
+        };
         let key = trimmed_line[..separator_index].trim();
         let value = trimmed_line[separator_index + 1..].trim();
         match key {
@@ -74,7 +76,7 @@ fn parse_yaml_scalar(value: &str) -> Option<String> {
 
         Some(out)
     } else {
-        Some(value.to_string())
+        None
     }
 }
 
@@ -171,6 +173,31 @@ hatena_entry_id: "12345678901234567890"
     }
 
     #[test]
+    fn preserves_entry_id_with_yaml_sequence_items_in_front_matter() {
+        let data = sample_data();
+
+        let existing_markdown = r#"---
+title: "old title"
+tags:
+  - rust
+  - cli
+hatena_entry_id: "12345678901234567890"
+---
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+        )));
+    }
+
+    #[test]
     fn rejects_invalid_quoted_entry_id() {
         let data = sample_data();
 
@@ -213,6 +240,28 @@ old body
 
         assert!(markdown.starts_with(&format!(
             "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"line1\\nline2\\t\\\"quoted\\\"\\\\tail\"\n---\n\n"
+        )));
+    }
+
+    #[test]
+    fn rejects_unquoted_hatena_entry_id() {
+        let data = sample_data();
+
+        let existing_markdown = r#"---
+title: "old title"
+hatena_entry_id: 12345678901234567890 # inline comment
+---
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
         )));
     }
 
