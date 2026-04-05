@@ -59,6 +59,7 @@ impl RepoLinkResolver {
     fn resolve_preferred_repo_url_uncached(&self, owner: &str, repo_name: &str) -> String {
         let repo_top_url = get_repo_top_url(owner, repo_name);
         let pages_url = get_pages_fallback_url(owner, repo_name);
+        let localized_pages_url = get_pages_localized_readme_url(owner, repo_name);
         let localized_readme_url =
             get_github_blob_head_url(owner, repo_name, LOCALIZED_README_MARKDOWN_PATH);
         let pages_html = self.fetch_text(&pages_url, "text/html,application/xhtml+xml");
@@ -67,17 +68,8 @@ impl RepoLinkResolver {
             "text/plain,text/markdown,*/*",
         );
 
-        let has_localized_readme_html = localized_readme_markdown.as_ref().is_some_and(|_| {
-            self.url_exists(
-                &get_pages_localized_readme_url(owner, repo_name),
-                "text/html,application/xhtml+xml",
-            )
-        });
-
         let Some(pages_html) = pages_html else {
-            return if has_localized_readme_html {
-                get_pages_localized_readme_url(owner, repo_name)
-            } else if localized_readme_markdown.is_some() {
+            return if localized_readme_markdown.is_some() {
                 localized_readme_url
             } else {
                 repo_top_url
@@ -87,6 +79,9 @@ impl RepoLinkResolver {
         let Some(localized_readme_markdown) = localized_readme_markdown else {
             return pages_url;
         };
+
+        let has_localized_readme_html =
+            self.url_exists(&localized_pages_url, "text/html,application/xhtml+xml");
 
         let readme_markdown = self.fetch_text(
             &get_raw_github_head_url(owner, repo_name, "README.md"),
