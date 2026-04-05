@@ -134,18 +134,49 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
 
 fn parse_yaml_scalar(value: &str) -> Option<String> {
     if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
-        Some(
-            value[1..value.len() - 1]
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\"),
-        )
+        let mut out = String::new();
+        let mut chars = value[1..value.len() - 1].chars();
+
+        while let Some(ch) = chars.next() {
+            if ch != '\\' {
+                out.push(ch);
+                continue;
+            }
+
+            match chars.next()? {
+                '\\' => out.push('\\'),
+                '"' => out.push('"'),
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                other => {
+                    out.push('\\');
+                    out.push(other);
+                }
+            }
+        }
+
+        Some(out)
     } else {
         Some(value.to_string())
     }
 }
 
 fn escape_yaml_double_quoted(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
+    let mut escaped = String::with_capacity(value.len());
+
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            _ => escaped.push(ch),
+        }
+    }
+
+    escaped
 }
 
 #[derive(Debug)]
@@ -382,6 +413,39 @@ old body
 
         assert!(markdown.starts_with(&format!(
             "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+        )));
+    }
+
+    #[test]
+    fn preserves_escaped_hatena_entry_id_from_yaml_front_matter() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let existing_markdown = r#"---
+title: "old title"
+hatena_entry_id: "line1\nline2\t\"quoted\"\\tail"
+---
+
+old body
+"#;
+
+        let markdown = build_markdown(
+            &data,
+            "someone",
+            Some(existing_markdown),
+            |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
+        );
+
+        assert!(markdown.starts_with(&format!(
+            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"line1\\nline2\\t\\\"quoted\\\"\\\\tail\"\n---\n\n"
         )));
     }
 
