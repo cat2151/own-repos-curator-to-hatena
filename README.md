@@ -1,1 +1,1 @@
-# own-repos-curator-to-hatena
+dummy。あとでjaをもとに自動生成されます

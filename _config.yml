@@ -1,0 +1,8 @@
+title: "own-repos-curator-to-hatena"
+description: "own-repos-curator-to-hatena"
+theme: jekyll-theme-slate
+github:
+  is_project_page: true
+  repository_url: https://github.com/cat2151/own-repos-curator-to-hatena
+plugins:
+  - jekyll-sitemap
