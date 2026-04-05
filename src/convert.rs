@@ -4,18 +4,21 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
-const GITHUB_BASE: &str = "https://github.com/cat2151";
-
-pub fn build_markdown(data: &RepoData) -> String {
+pub fn build_markdown<F>(data: &RepoData, owner: &str, mut resolve_repo_url: F) -> String
+where
+    F: FnMut(&str, &str) -> String,
+{
     let updated_at = &data.meta.last_json_commit_push_date;
     let groups = collect_groups(data);
+    let total_repos = groups.iter().map(|group| group.repos.len()).sum::<usize>();
+    let mut resolved_repos = 0usize;
 
     let mut out = String::new();
 
     // frontmatter (table形式, はてなブログ互換)
     out.push_str("| | |\n");
     out.push_str("| --- | --- |\n");
-    out.push_str("| title | cat2151のGitHubリポジトリ一覧 |\n");
+    out.push_str(&format!("| title | {owner}のGitHubリポジトリ一覧 |\n"));
     out.push('\n');
 
     out.push_str("## 目次\n\n");
@@ -30,7 +33,9 @@ pub fn build_markdown(data: &RepoData) -> String {
     out.push('\n');
 
     out.push_str("## 概要\n\n");
-    out.push_str("cat2151のGitHubリポジトリをグループ別に一覧化したものです。\n\n");
+    out.push_str(&format!(
+        "{owner}のGitHubリポジトリをグループ別に一覧化したものです。\n\n"
+    ));
     out.push_str(&format!("最終更新: {updated_at}\n\n"));
 
     for group in groups {
@@ -38,7 +43,16 @@ pub fn build_markdown(data: &RepoData) -> String {
         out.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
         out.push_str(&format!("## {}\n\n", group.name));
         for repo in group.repos {
-            let url = format!("{GITHUB_BASE}/{}", repo.name);
+            resolved_repos += 1;
+            println!(
+                "[url-resolve] ({resolved_repos}/{total_repos}) start: {owner}/{}",
+                repo.name
+            );
+            let url = resolve_repo_url(owner, &repo.name);
+            println!(
+                "[url-resolve] ({resolved_repos}/{total_repos}) done: {owner}/{} -> {url}",
+                repo.name
+            );
             out.push_str(&format!("### [{}]({})\n\n", repo.name, url));
 
             if repo.desc_short.is_empty() {
@@ -147,6 +161,7 @@ mod tests {
             meta: Meta {
                 github_desc_updated_at: "2026-04-05".into(),
                 last_json_commit_push_date: "2026-04-05".into(),
+                owner: None,
             },
             registered_tags: vec![],
             registered_groups: vec!["beta".into(), "alpha".into(), "etc".into(), "stub".into()],
@@ -164,7 +179,9 @@ mod tests {
             ],
         };
 
-        let markdown = build_markdown(&data);
+        let markdown = build_markdown(&data, "cat2151", |owner, repo_name| {
+            format!("https://github.com/{owner}/{repo_name}")
+        });
 
         let toc_pos = markdown.find("## 目次").unwrap();
         let overview_pos = markdown.find("## 概要").unwrap();
@@ -185,6 +202,53 @@ mod tests {
         assert!(markdown.contains("- [stub](#group-stub) (1件)"));
         assert!(markdown.contains("<a id=\"group-etc\"></a>"));
         assert!(markdown.contains("<a id=\"group-stub\"></a>"));
+    }
+
+    #[test]
+    fn uses_generated_repo_target_when_available() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: None,
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("cat-self-update", "tools")],
+        };
+
+        let markdown = build_markdown(&data, "cat2151", |owner, repo_name| {
+            if repo_name == "cat-self-update" {
+                format!("https://github.com/{owner}/{repo_name}/blob/HEAD/README.ja.md")
+            } else {
+                format!("https://github.com/{owner}/{repo_name}")
+            }
+        });
+
+        assert!(markdown.contains(
+            "### [cat-self-update](https://github.com/cat2151/cat-self-update/blob/HEAD/README.ja.md)"
+        ));
+    }
+
+    #[test]
+    fn uses_owner_in_title_and_overview() {
+        let data = RepoData {
+            meta: Meta {
+                github_desc_updated_at: "2026-04-05".into(),
+                last_json_commit_push_date: "2026-04-05".into(),
+                owner: Some("someone".into()),
+            },
+            registered_tags: vec![],
+            registered_groups: vec!["tools".into()],
+            repos: vec![repo("tool-1", "tools")],
+        };
+
+        let markdown = build_markdown(&data, "someone", |owner, repo_name| {
+            format!("https://github.com/{owner}/{repo_name}")
+        });
+
+        assert!(markdown.contains("| title | someoneのGitHubリポジトリ一覧 |"));
+        assert!(markdown.contains("someoneのGitHubリポジトリをグループ別に一覧化したものです。"));
     }
 
     fn repo(name: &str, group: &str) -> Repo {

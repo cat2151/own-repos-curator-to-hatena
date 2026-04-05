@@ -1,6 +1,8 @@
 mod convert;
 mod git;
 mod model;
+mod paths;
+mod repo_links;
 
 use anyhow::{Context, Result};
 use cat_self_update_lib::{check_remote_commit, self_update};
@@ -34,15 +36,6 @@ enum Commands {
     Check,
 }
 
-fn repos_json_path() -> Result<PathBuf> {
-    let base = dirs::data_local_dir()
-        .ok_or_else(|| anyhow::anyhow!("failed to resolve AppData\\Local"))?;
-    Ok(base
-        .join("own-repos-curator")
-        .join("data")
-        .join("repos.json"))
-}
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -58,13 +51,24 @@ fn main() -> Result<()> {
 }
 
 fn run_publish(dry_run: bool) -> Result<()> {
-    let json_path = repos_json_path()?;
+    let json_path = paths::repos_json_path()?;
     let json = fs::read_to_string(&json_path)
         .with_context(|| format!("failed to read {}", json_path.display()))?;
     let data: model::RepoData =
         serde_json::from_str(&json).context("failed to parse repos.json")?;
+    let owner = data
+        .meta
+        .owner
+        .as_deref()
+        .map(str::trim)
+        .filter(|owner| !owner.is_empty())
+        .unwrap_or(REPO_OWNER);
+    let mut link_resolver =
+        repo_links::RepoLinkResolver::new().context("failed to initialize repo link resolver")?;
 
-    let markdown = convert::build_markdown(&data);
+    let markdown = convert::build_markdown(&data, owner, |owner, repo_name| {
+        link_resolver.resolve_preferred_repo_url(owner, repo_name)
+    });
 
     if dry_run {
         let out_path = PathBuf::from("own-repos-curator.md");

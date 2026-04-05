@@ -1,3 +1,4 @@
+use crate::paths;
 use anyhow::{anyhow, Context, Result};
 use std::{
     path::{Path, PathBuf},
@@ -5,8 +6,7 @@ use std::{
 };
 
 pub fn managed_dir() -> Result<PathBuf> {
-    let base = dirs::data_local_dir().ok_or_else(|| anyhow!("failed to resolve local data dir"))?;
-    Ok(base.join("own-repos-curator-to-hatena").join("repos"))
+    paths::managed_repos_dir().map_err(|err| anyhow!("{err}"))
 }
 
 pub fn ensure_managed_clone(repo: &str) -> Result<PathBuf> {

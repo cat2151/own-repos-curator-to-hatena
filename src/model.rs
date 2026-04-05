@@ -12,6 +12,7 @@ pub struct RepoData {
 pub struct Meta {
     pub github_desc_updated_at: String,
     pub last_json_commit_push_date: String,
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

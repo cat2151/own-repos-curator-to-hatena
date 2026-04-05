@@ -16,3 +16,6 @@ cat-self-update-lib = { git = "https://github.com/cat2151/cat-self-update", pack
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+unicode-normalization = "0.1"
