@@ -104,9 +104,9 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
     let mut hatena_entry_id: Option<String> = None;
 
     for line in lines {
-        let line = line.trim();
+        let trimmed_line = line.trim();
 
-        if line == "---" {
+        if trimmed_line == "---" {
             return if has_title {
                 match hatena_entry_id {
                     Some(value) if !value.is_empty() => Some(value),
@@ -117,14 +117,14 @@ fn extract_hatena_entry_id(existing_markdown: Option<&str>) -> Option<String> {
             };
         }
 
-        if line.is_empty() || line.starts_with('#') {
+        if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
             continue;
         }
 
         // `:` を含まない行は、この用途では不正な front matter として扱う。
-        let separator_index = line.find(':')?;
-        let key = line[..separator_index].trim();
-        let value = line[separator_index + 1..].trim();
+        let separator_index = trimmed_line.find(':')?;
+        let key = trimmed_line[..separator_index].trim();
+        let value = trimmed_line[separator_index + 1..].trim();
         match key {
             "title" => {
                 parse_yaml_scalar(value)?;

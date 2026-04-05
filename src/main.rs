@@ -7,7 +7,8 @@ mod repo_links;
 use anyhow::{Context, Result};
 use cat_self_update_lib::{check_remote_commit, self_update};
 use clap::{Parser, Subcommand};
-use std::{fs, io::ErrorKind, path::PathBuf, process::Command};
+use std::io::ErrorKind;
+use std::{fs, path::PathBuf, process::Command};
 
 const BUILD_COMMIT_HASH: &str = env!("BUILD_COMMIT_HASH");
 const REPO_OWNER: &str = "cat2151";
