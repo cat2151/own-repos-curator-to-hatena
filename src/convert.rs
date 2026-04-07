@@ -13,19 +13,26 @@ use yaml_frontmatter::{escape_yaml_double_quoted, extract_hatena_entry_id};
 const MARKDOWN_TEMPLATE: &str = include_str!("../templates/template.md");
 
 #[cfg(test)]
-pub(crate) fn template_front_matter_title() -> &'static str {
+pub(crate) fn template_front_matter_prefix(hatena_entry_id: &str) -> String {
     MARKDOWN_TEMPLATE
-        .lines()
-        .find_map(|line| line.strip_prefix("title: \"")?.strip_suffix('"'))
-        .expect("テンプレートにはダブルクォートで囲まれたtitle行が必要です")
+        .split("## 目次")
+        .next()
+        .expect("テンプレートには目次セクションが必要です")
+        .replace(
+            "{{HATENA_ENTRY_ID}}",
+            &escape_yaml_double_quoted(hatena_entry_id),
+        )
 }
 
 #[cfg(test)]
-pub(crate) fn template_data_index_link() -> &'static str {
+pub(crate) fn template_data_index_block() -> &'static str {
     MARKDOWN_TEMPLATE
-        .lines()
-        .find(|line| line.starts_with("[own-repos-curator-data]("))
-        .expect("テンプレートにはown-repos-curator-dataへのリンクが必要です")
+        .split("{{TOC}}")
+        .nth(1)
+        .and_then(|section| section.split("## 概要").next())
+        .map(str::trim)
+        .filter(|section| !section.is_empty())
+        .expect("テンプレートには目次と概要の間に静的ブロックが必要です")
 }
 
 pub fn build_markdown<F>(
@@ -230,7 +237,7 @@ fn apply_template(template: &str, values: &[(&str, &str)]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_markdown, template_data_index_link, template_front_matter_title};
+    use super::{build_markdown, template_data_index_block, template_front_matter_prefix};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -262,7 +269,7 @@ mod tests {
         });
 
         let toc_pos = markdown.find("## 目次").unwrap();
-        let data_index_link_pos = markdown.find(template_data_index_link()).unwrap();
+        let data_index_link_pos = markdown.find(template_data_index_block()).unwrap();
         let overview_pos = markdown.find("## 概要").unwrap();
         let beta_pos = markdown.find("## beta").unwrap();
         let alpha_pos = markdown.find("## alpha").unwrap();
@@ -280,7 +287,7 @@ mod tests {
         assert!(markdown.contains("- [beta](#group-beta) (2件)"));
         assert!(markdown.contains("- [etc](#group-etc) (3件)"));
         assert!(markdown.contains("- [stub](#group-stub) (1件)"));
-        assert!(markdown.contains(template_data_index_link()));
+        assert!(markdown.contains(template_data_index_block()));
         assert!(markdown.contains("<a id=\"group-etc\"></a>"));
         assert!(markdown.contains("<a id=\"group-stub\"></a>"));
         assert!(markdown.contains("（説明なし）\n\n---\n\n<a id=\"group-alpha\"></a>"));
@@ -330,10 +337,7 @@ mod tests {
             format!("https://github.com/{owner}/{repo_name}")
         });
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("")));
         assert!(markdown.contains("someoneのGitHubリポジトリをグループ別に一覧化したものです。"));
     }
 

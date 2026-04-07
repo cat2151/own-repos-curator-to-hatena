@@ -99,7 +99,7 @@ pub(super) fn escape_yaml_double_quoted(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::convert::{build_markdown, template_front_matter_title};
+    use crate::convert::{build_markdown, template_front_matter_prefix};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -121,10 +121,7 @@ old body
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("12345678901234567890")));
     }
 
     #[test]
@@ -144,10 +141,7 @@ old body
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("")));
     }
 
     #[test]
@@ -169,10 +163,7 @@ hatena_entry_id: "12345678901234567890"
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("12345678901234567890")));
     }
 
     #[test]
@@ -195,10 +186,7 @@ hatena_entry_id: "12345678901234567890"
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("12345678901234567890")));
     }
 
     #[test]
@@ -218,10 +206,7 @@ hatena_entry_id: "12345678901234567890
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("")));
     }
 
     #[test]
@@ -243,9 +228,8 @@ old body
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"line1\\nline2\\t\\\"quoted\\\"\\\\tail\"\n---\n\n",
-            template_front_matter_title()
+        assert!(markdown.starts_with(&template_front_matter_prefix(
+            "line1\nline2\t\"quoted\"\\tail"
         )));
     }
 
@@ -266,10 +250,7 @@ hatena_entry_id: 12345678901234567890 # inline comment
             |owner, repo_name| format!("https://github.com/{owner}/{repo_name}"),
         );
 
-        assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
-            template_front_matter_title()
-        )));
+        assert!(markdown.starts_with(&template_front_matter_prefix("")));
     }
 
     #[test]
