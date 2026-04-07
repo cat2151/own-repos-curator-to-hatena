@@ -1,7 +1,9 @@
 use crate::model::{Repo, RepoData};
+use regex::{Captures, Regex};
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, HashMap},
+    sync::OnceLock,
 };
 
 mod yaml_frontmatter;
@@ -195,11 +197,19 @@ where
 }
 
 fn apply_template(template: &str, values: &[(&str, &str)]) -> String {
-    let mut rendered = template.to_string();
-    for (name, value) in values {
-        rendered = rendered.replace(&format!("{{{{{name}}}}}"), value);
-    }
-    rendered
+    static PLACEHOLDER_REGEX: OnceLock<Regex> = OnceLock::new();
+
+    let lookup: HashMap<_, _> = values.iter().copied().collect();
+    PLACEHOLDER_REGEX
+        .get_or_init(|| Regex::new(r"\{\{([A-Z_]+)\}\}").expect("valid template placeholder regex"))
+        .replace_all(template, |captures: &Captures<'_>| {
+            lookup
+                .get(captures.get(1).map_or("", |name| name.as_str()))
+                .copied()
+                .unwrap_or_else(|| captures.get(0).map_or("", |full| full.as_str()))
+                .to_string()
+        })
+        .into_owned()
 }
 
 #[cfg(test)]
