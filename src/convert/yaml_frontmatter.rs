@@ -99,7 +99,7 @@ pub(super) fn escape_yaml_double_quoted(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::convert::{build_markdown, FRONT_MATTER_TITLE};
+    use crate::convert::{build_markdown, template_front_matter_title};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -122,7 +122,8 @@ old body
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -144,7 +145,8 @@ old body
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -168,7 +170,8 @@ hatena_entry_id: "12345678901234567890"
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -193,7 +196,8 @@ hatena_entry_id: "12345678901234567890"
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"12345678901234567890\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -215,7 +219,8 @@ hatena_entry_id: "12345678901234567890
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -239,7 +244,8 @@ old body
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"line1\\nline2\\t\\\"quoted\\\"\\\\tail\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"line1\\nline2\\t\\\"quoted\\\"\\\\tail\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 
@@ -261,7 +267,8 @@ hatena_entry_id: 12345678901234567890 # inline comment
         );
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
+            template_front_matter_title()
         )));
     }
 

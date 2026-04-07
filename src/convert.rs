@@ -10,10 +10,23 @@ mod yaml_frontmatter;
 
 use yaml_frontmatter::{escape_yaml_double_quoted, extract_hatena_entry_id};
 
-const FRONT_MATTER_TITLE: &str = "（随時更新）GitHubの自分の公開リポジトリ一覧を自動生成させてみる";
 const MARKDOWN_TEMPLATE: &str = include_str!("../templates/template.md");
-const DATA_INDEX_LINK: &str =
-    "[own-repos-curator-data](https://cat2151.github.io/own-repos-curator-data/)";
+
+#[cfg(test)]
+pub(crate) fn template_front_matter_title() -> &'static str {
+    MARKDOWN_TEMPLATE
+        .lines()
+        .find_map(|line| line.strip_prefix("title: \"")?.strip_suffix('"'))
+        .expect("template should contain a quoted title line")
+}
+
+#[cfg(test)]
+pub(crate) fn template_data_index_link() -> &'static str {
+    MARKDOWN_TEMPLATE
+        .lines()
+        .find(|line| line.starts_with("[own-repos-curator-data]("))
+        .expect("template should contain own-repos-curator-data link")
+}
 
 pub fn build_markdown<F>(
     data: &RepoData,
@@ -41,13 +54,11 @@ where
     apply_template(
         MARKDOWN_TEMPLATE,
         &[
-            ("TITLE", &escape_yaml_double_quoted(FRONT_MATTER_TITLE)),
             (
                 "HATENA_ENTRY_ID",
                 &escape_yaml_double_quoted(&hatena_entry_id),
             ),
             ("TOC", &toc),
-            ("DATA_INDEX_LINK", DATA_INDEX_LINK),
             ("OWNER", owner),
             ("UPDATED_AT", updated_at),
             ("GROUPS", &group_sections),
@@ -219,7 +230,7 @@ fn apply_template(template: &str, values: &[(&str, &str)]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_markdown, DATA_INDEX_LINK, FRONT_MATTER_TITLE};
+    use super::{build_markdown, template_data_index_link, template_front_matter_title};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -251,7 +262,7 @@ mod tests {
         });
 
         let toc_pos = markdown.find("## 目次").unwrap();
-        let data_index_link_pos = markdown.find(DATA_INDEX_LINK).unwrap();
+        let data_index_link_pos = markdown.find(template_data_index_link()).unwrap();
         let overview_pos = markdown.find("## 概要").unwrap();
         let beta_pos = markdown.find("## beta").unwrap();
         let alpha_pos = markdown.find("## alpha").unwrap();
@@ -269,7 +280,7 @@ mod tests {
         assert!(markdown.contains("- [beta](#group-beta) (2件)"));
         assert!(markdown.contains("- [etc](#group-etc) (3件)"));
         assert!(markdown.contains("- [stub](#group-stub) (1件)"));
-        assert!(markdown.contains(DATA_INDEX_LINK));
+        assert!(markdown.contains(template_data_index_link()));
         assert!(markdown.contains("<a id=\"group-etc\"></a>"));
         assert!(markdown.contains("<a id=\"group-stub\"></a>"));
         assert!(markdown.contains("（説明なし）\n\n---\n\n<a id=\"group-alpha\"></a>"));
@@ -320,7 +331,8 @@ mod tests {
         });
 
         assert!(markdown.starts_with(&format!(
-            "---\ntitle: \"{FRONT_MATTER_TITLE}\"\nhatena_entry_id: \"\"\n---\n\n"
+            "---\ntitle: \"{}\"\nhatena_entry_id: \"\"\n---\n\n",
+            template_front_matter_title()
         )));
         assert!(markdown.contains("someoneのGitHubリポジトリをグループ別に一覧化したものです。"));
     }

@@ -1,5 +1,5 @@
 ---
-title: "{{TITLE}}"
+title: "（随時更新）GitHubの自分の公開リポジトリ一覧を自動生成させてみる"
 hatena_entry_id: "{{HATENA_ENTRY_ID}}"
 ---
 
@@ -7,7 +7,7 @@ hatena_entry_id: "{{HATENA_ENTRY_ID}}"
 
 {{TOC}}
 
-{{DATA_INDEX_LINK}}
+[own-repos-curator-data](https://cat2151.github.io/own-repos-curator-data/)
 
 ## 概要
 
