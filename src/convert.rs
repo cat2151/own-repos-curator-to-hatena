@@ -201,12 +201,17 @@ fn apply_template(template: &str, values: &[(&str, &str)]) -> String {
 
     let lookup: HashMap<_, _> = values.iter().copied().collect();
     PLACEHOLDER_REGEX
-        .get_or_init(|| Regex::new(r"\{\{([A-Z_]+)\}\}").expect("valid template placeholder regex"))
+        .get_or_init(|| {
+            Regex::new(r"\{\{([A-Z_]+)\}\}")
+                .expect("failed to compile template placeholder regex pattern")
+        })
         .replace_all(template, |captures: &Captures<'_>| {
+            let placeholder_name = captures.get(1).map_or("", |name| name.as_str());
+            let fallback = captures.get(0).map_or("", |full| full.as_str());
             lookup
-                .get(captures.get(1).map_or("", |name| name.as_str()))
+                .get(placeholder_name)
                 .copied()
-                .unwrap_or_else(|| captures.get(0).map_or("", |full| full.as_str()))
+                .unwrap_or(fallback)
                 .to_string()
         })
         .into_owned()
