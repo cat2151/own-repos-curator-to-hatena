@@ -17,7 +17,7 @@ pub(crate) fn template_front_matter_title() -> &'static str {
     MARKDOWN_TEMPLATE
         .lines()
         .find_map(|line| line.strip_prefix("title: \"")?.strip_suffix('"'))
-        .expect("template should contain a quoted title line")
+        .expect("テンプレートにはダブルクォートで囲まれたtitle行が必要です")
 }
 
 #[cfg(test)]
@@ -25,7 +25,7 @@ pub(crate) fn template_data_index_link() -> &'static str {
     MARKDOWN_TEMPLATE
         .lines()
         .find(|line| line.starts_with("[own-repos-curator-data]("))
-        .expect("template should contain own-repos-curator-data link")
+        .expect("テンプレートにはown-repos-curator-dataへのリンクが必要です")
 }
 
 pub fn build_markdown<F>(
