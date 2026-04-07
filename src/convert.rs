@@ -9,6 +9,9 @@ mod yaml_frontmatter;
 use yaml_frontmatter::{escape_yaml_double_quoted, extract_hatena_entry_id};
 
 const FRONT_MATTER_TITLE: &str = "（随時更新）GitHubの自分の公開リポジトリ一覧を自動生成させてみる";
+const MARKDOWN_TEMPLATE: &str = include_str!("../templates/template.md");
+const DATA_INDEX_LINK: &str =
+    "[own-repos-curator-data](https://cat2151.github.io/own-repos-curator-data/)";
 
 pub fn build_markdown<F>(
     data: &RepoData,
@@ -24,81 +27,30 @@ where
     let total_repos = groups.iter().map(|group| group.repos.len()).sum::<usize>();
     let mut resolved_repos = 0usize;
     let hatena_entry_id = extract_hatena_entry_id(existing_markdown).unwrap_or_default();
+    let toc = build_toc(&groups);
+    let group_sections = build_group_sections(
+        &groups,
+        owner,
+        total_repos,
+        &mut resolved_repos,
+        &mut resolve_repo_url,
+    );
 
-    let mut out = String::new();
-
-    out.push_str("---\n");
-    out.push_str(&format!(
-        "title: \"{}\"\n",
-        escape_yaml_double_quoted(FRONT_MATTER_TITLE)
-    ));
-    out.push_str(&format!(
-        "hatena_entry_id: \"{}\"\n",
-        escape_yaml_double_quoted(&hatena_entry_id)
-    ));
-    out.push_str("---\n\n");
-
-    out.push_str("## 目次\n\n");
-    for group in &groups {
-        let anchor = group_anchor(group.name);
-        out.push_str(&format!(
-            "- [{}](#{anchor}) ({}件)\n",
-            group.name,
-            group.repos.len()
-        ));
-    }
-    out.push('\n');
-
-    out.push_str("## 概要\n\n");
-    out.push_str(&format!(
-        "{owner}のGitHubリポジトリをグループ別に一覧化したものです。\n\n"
-    ));
-    out.push_str(&format!("最終更新: {updated_at}\n\n"));
-
-    for (idx, group) in groups.iter().enumerate() {
-        let anchor = group_anchor(group.name);
-        out.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
-        out.push_str(&format!("## {}\n\n", group.name));
-        for repo in &group.repos {
-            resolved_repos += 1;
-            println!(
-                "[url-resolve] ({resolved_repos}/{total_repos}) start: {owner}/{}",
-                repo.name
-            );
-            let url = resolve_repo_url(owner, &repo.name);
-            println!(
-                "[url-resolve] ({resolved_repos}/{total_repos}) done: {owner}/{} -> {url}",
-                repo.name
-            );
-            out.push_str(&format!("### [{}]({})\n\n", repo.name, url));
-
-            if repo.desc_short.is_empty() {
-                out.push_str("（説明なし）\n\n");
-            } else {
-                out.push_str(&format!("{}\n\n", repo.desc_short));
-            }
-
-            if !repo.desc_long.is_empty() {
-                out.push_str(&format!("{}\n\n", repo.desc_long));
-            }
-
-            if !repo.tags.is_empty() {
-                let tag_str = repo
-                    .tags
-                    .iter()
-                    .map(|t| format!("`{t}`"))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                out.push_str(&format!("タグ: {tag_str}\n\n"));
-            }
-        }
-
-        if idx + 1 < groups.len() {
-            out.push_str("---\n\n");
-        }
-    }
-
-    out
+    apply_template(
+        MARKDOWN_TEMPLATE,
+        &[
+            ("TITLE", &escape_yaml_double_quoted(FRONT_MATTER_TITLE)),
+            (
+                "HATENA_ENTRY_ID",
+                &escape_yaml_double_quoted(&hatena_entry_id),
+            ),
+            ("TOC", &toc),
+            ("DATA_INDEX_LINK", DATA_INDEX_LINK),
+            ("OWNER", owner),
+            ("UPDATED_AT", updated_at),
+            ("GROUPS", &group_sections),
+        ],
+    )
 }
 
 #[derive(Debug)]
@@ -171,9 +123,88 @@ fn group_anchor(group: &str) -> String {
     }
 }
 
+fn build_toc(groups: &[RepoGroup<'_>]) -> String {
+    let mut toc = String::new();
+    for group in groups {
+        let anchor = group_anchor(group.name);
+        toc.push_str(&format!(
+            "- [{}](#{anchor}) ({}件)\n",
+            group.name,
+            group.repos.len()
+        ));
+    }
+    toc
+}
+
+fn build_group_sections<F>(
+    groups: &[RepoGroup<'_>],
+    owner: &str,
+    total_repos: usize,
+    resolved_repos: &mut usize,
+    resolve_repo_url: &mut F,
+) -> String
+where
+    F: FnMut(&str, &str) -> String,
+{
+    let mut sections = String::new();
+
+    for (idx, group) in groups.iter().enumerate() {
+        let anchor = group_anchor(group.name);
+        sections.push_str(&format!("<a id=\"{anchor}\"></a>\n\n"));
+        sections.push_str(&format!("## {}\n\n", group.name));
+        for repo in &group.repos {
+            *resolved_repos += 1;
+            println!(
+                "[url-resolve] ({resolved_repos}/{total_repos}) start: {owner}/{}",
+                repo.name
+            );
+            let url = resolve_repo_url(owner, &repo.name);
+            println!(
+                "[url-resolve] ({resolved_repos}/{total_repos}) done: {owner}/{} -> {url}",
+                repo.name
+            );
+            sections.push_str(&format!("### [{}]({})\n\n", repo.name, url));
+
+            if repo.desc_short.is_empty() {
+                sections.push_str("（説明なし）\n\n");
+            } else {
+                sections.push_str(&format!("{}\n\n", repo.desc_short));
+            }
+
+            if !repo.desc_long.is_empty() {
+                sections.push_str(&format!("{}\n\n", repo.desc_long));
+            }
+
+            if !repo.tags.is_empty() {
+                let tag_str = repo
+                    .tags
+                    .iter()
+                    .map(|t| format!("`{t}`"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                sections.push_str(&format!("タグ: {tag_str}\n\n"));
+            }
+        }
+
+        if idx + 1 < groups.len() {
+            sections.push_str("---\n\n");
+        }
+    }
+
+    sections
+}
+
+fn apply_template(template: &str, values: &[(&str, &str)]) -> String {
+    let mut rendered = template.to_string();
+    for (name, value) in values {
+        rendered = rendered.replace(&format!("{{{{{name}}}}}"), value);
+    }
+    rendered
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_markdown, FRONT_MATTER_TITLE};
+    use super::{build_markdown, DATA_INDEX_LINK, FRONT_MATTER_TITLE};
     use crate::model::{Meta, Repo, RepoData};
 
     #[test]
@@ -205,6 +236,7 @@ mod tests {
         });
 
         let toc_pos = markdown.find("## 目次").unwrap();
+        let data_index_link_pos = markdown.find(DATA_INDEX_LINK).unwrap();
         let overview_pos = markdown.find("## 概要").unwrap();
         let beta_pos = markdown.find("## beta").unwrap();
         let alpha_pos = markdown.find("## alpha").unwrap();
@@ -212,7 +244,8 @@ mod tests {
         let etc_pos = markdown.find("## etc").unwrap();
         let stub_pos = markdown.find("## stub").unwrap();
 
-        assert!(toc_pos < overview_pos);
+        assert!(toc_pos < data_index_link_pos);
+        assert!(data_index_link_pos < overview_pos);
         assert!(beta_pos < alpha_pos);
         assert!(alpha_pos < gamma_pos);
         assert!(gamma_pos < etc_pos);
@@ -221,6 +254,7 @@ mod tests {
         assert!(markdown.contains("- [beta](#group-beta) (2件)"));
         assert!(markdown.contains("- [etc](#group-etc) (3件)"));
         assert!(markdown.contains("- [stub](#group-stub) (1件)"));
+        assert!(markdown.contains(DATA_INDEX_LINK));
         assert!(markdown.contains("<a id=\"group-etc\"></a>"));
         assert!(markdown.contains("<a id=\"group-stub\"></a>"));
         assert!(markdown.contains("（説明なし）\n\n---\n\n<a id=\"group-alpha\"></a>"));
